@@ -15,7 +15,7 @@ import dateutil.parser
 import outlookCalReader
 
 HIDE_SUBJECT = True
-ORGANIZATION_NAME = "ABC"
+ORGANIZATION_NAME = "Company"
 
 RecurrenceTypeDict = {0:"DAILY", 1:"WEEKLY", 2:"MONTHLY",}
 
@@ -55,15 +55,8 @@ class GoogleCalendar:
         if outlookEvent.GlobalAppointmentID.lower() in self.eventIds:
             return True
         return False
-    
-    def addOutlookCalEvent(self, outlookEvent):
-        eId = outlookEvent.GlobalAppointmentID.lower()
-        if HIDE_SUBJECT:
-            summary = "%s Busy" % ORGANIZATION_NAME
-        else:
-            summary = outlookEvent.Subject
-            
-        location = outlookEvent.Location
+        
+    def convertOutlookStartEnd(self, outlookEvent):
         start = {}
         end = {}
         if outlookEvent.AllDayEvent:
@@ -80,6 +73,17 @@ class GoogleCalendar:
             if str(outlookEvent.EndTimeZone) == "W. Europe Standard Time":
                 end['dateTime'] = end['dateTime'].replace("+00:00", "+02:00")
                 end['timeZone'] = "Europe/Berlin"
+        return (start, end)
+    
+    def addOutlookCalEvent(self, outlookEvent):
+        eId = outlookEvent.GlobalAppointmentID.lower()
+        if HIDE_SUBJECT:
+            summary = "%s Busy" % ORGANIZATION_NAME
+        else:
+            summary = outlookEvent.Subject
+            
+        location = outlookEvent.Location
+        start, end = self.convertOutlookStartEnd(outlookEvent)
         
         event = {
               'id': eId,
@@ -129,6 +133,8 @@ class GoogleCalendar:
                 else: # update the location of non-exception instances
                     oInstance = oRecPattern.Exceptions.Item(i+1).AppointmentItem
                     gInstance['location'] = oInstance.Location
+                    
+                    gInstance['start'], gInstance['end'] = self.convertOutlookStartEnd(oInstance)
                     self.service.events().update(calendarId='primary', eventId=gInstance['id'], body=gInstance).execute()
                     print("updated instance on %s at %s" % (str(oInstance.Start)[:-15], oInstance.Location))
             
