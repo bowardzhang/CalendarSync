@@ -11,7 +11,7 @@ import win32com.client, datetime
 
 RecurrenceTypeDict = {0:"DAILY", 1:"WEEKLY", 2:"MONTHLY",}
 
-def getOutlookCalEvents(dayMax = 90, eventMax = 100):
+def getOutlookCalEvents(dayMax = 360, eventMax = 100):
     Outlook = win32com.client.Dispatch("Outlook.Application")
     namespace = Outlook.GetNamespace("MAPI")
 
@@ -44,6 +44,7 @@ if __name__ == "__main__":
               event.StartTimeZone, event.End, event.EndTimeZone, event.Organizer))
         if event.AllDayEvent:
             print("All Day Event\n")
+            print(event.GlobalAppointmentID.lower())
             
         if event.IsRecurring:
             freq = RecurrenceTypeDict[event.GetRecurrencePattern().Interval]

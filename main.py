@@ -11,13 +11,20 @@ from apiclient.discovery import build
 from httplib2 import Http
 from oauth2client import file, client, tools
 import datetime
-import dateutil.parser
 import outlookCalReader
+import pytz.reference
 
 HIDE_SUBJECT = True
-ORGANIZATION_NAME = "Company"
+ORGANIZATION_NAME = "Company_XXX"
 
 RecurrenceTypeDict = {0:"DAILY", 1:"WEEKLY", 2:"MONTHLY",}
+
+# correct string like 2018-11-05T10:00:00+00:00
+def correctDateTime(strDateTime):
+    local_tz = pytz.reference.LocalTimezone()
+    date = datetime.datetime.strptime(strDateTime, "%Y-%m-%dT%H:%M:%S+00:00")
+    hourOffset = int(date.astimezone(local_tz).utcoffset().total_seconds()/3600)
+    return strDateTime.replace("+00:00", "%+03d:00" % hourOffset) # fill with leading sign and zero
 
 # class
 class GoogleCalendar:
@@ -32,7 +39,7 @@ class GoogleCalendar:
         self.service = build('calendar', 'v3', http=creds.authorize(Http()))
         self.eventIds = []
         
-    def readCalEvents(self, aheadDays=90, eventMax = 100):
+    def readCalEvents(self, aheadDays=360, eventMax = 100):
         dtNow = datetime.datetime.now()
         dtMax = dtNow + datetime.timedelta(days=aheadDays)
         events_result = self.service.events().list(
@@ -68,16 +75,16 @@ class GoogleCalendar:
             
             # fix incorrect timezone of outlook events
             if str(outlookEvent.StartTimeZone) == "W. Europe Standard Time":
-                start['dateTime'] = start['dateTime'].replace("+00:00", "+02:00")
+                start['dateTime'] = correctDateTime(start['dateTime'])
                 start['timeZone'] = "Europe/Berlin"
             if str(outlookEvent.EndTimeZone) == "W. Europe Standard Time":
-                end['dateTime'] = end['dateTime'].replace("+00:00", "+02:00")
+                end['dateTime'] = correctDateTime(end['dateTime'])
                 end['timeZone'] = "Europe/Berlin"
         return (start, end)
     
     def addOutlookCalEvent(self, outlookEvent):
         eId = outlookEvent.GlobalAppointmentID.lower()
-        if HIDE_SUBJECT:
+        if HIDE_SUBJECT and outlookEvent.Subject.lower().find('urlaub')==-1:
             summary = "%s Busy" % ORGANIZATION_NAME
         else:
             summary = outlookEvent.Subject
@@ -112,31 +119,35 @@ class GoogleCalendar:
         startStr = start.get('dateTime', start.get('date'))
         if eventExists:
             self.service.events().update(calendarId='primary', eventId=eId, body=event).execute()
+            print(event) # todo
             print('\nEvent [%s] on %s exists and is updated' % (outlookEvent.Subject, startStr))
         else:
             event = self.service.events().insert(calendarId='primary', body=event).execute()
-            print('\nEvent %s on %s is created' % (summary, startStr))
+            print('\nEvent %s on %s is created' % (outlookEvent.Subject, startStr))
         
         # update event instances in a recurrence series according to outlook
-        if outlookEvent.IsRecurring:            
+        if outlookEvent.IsRecurring:
             gInstances = self.service.events().instances(calendarId='primary', eventId=eId, showDeleted=True).execute()['items']
             # must order the gInstances by time in order to keep the indexes consistent
             gInstances = sorted(gInstances, key=lambda x: x['start']['dateTime'])
             
             for i in range(oRecPattern.Exceptions.count):
-                gInstance = gInstances[i]
-                if oRecPattern.Exceptions.Item(i+1).Deleted: # deactivate exceptions
-                    if gInstance['status'] != 'cancelled':
-                        gInstance['status'] = 'cancelled'
+                oItem = oRecPattern.Exceptions.Item(i+1)
+                if i >= len(gInstances): # todo
+                    print("\n Warning: additional instance on %s" % str(oItem.AppointmentItem.Start)[:-15])
+                else:
+                    gInstance = gInstances[i]
+                    if oItem.Deleted: # deactivate exceptions
+                        if gInstance['status'] != 'cancelled':
+                            gInstance['status'] = 'cancelled'
+                            self.service.events().update(calendarId='primary', eventId=gInstance['id'], body=gInstance).execute()
+                            print("removed exception event on %s in a recurrence series" % str(oItem)[:-15])
+                    else: # update the location of non-exception instances
+                        oInstance = oItem.AppointmentItem
+                        gInstance['location'] = oInstance.Location
+                        gInstance['start'], gInstance['end'] = self.convertOutlookStartEnd(oInstance)
                         self.service.events().update(calendarId='primary', eventId=gInstance['id'], body=gInstance).execute()
-                        print("removed exception event on %s in a recurrence series" % str(oRecPattern.Exceptions.Item(i+1))[:-15])
-                else: # update the location of non-exception instances
-                    oInstance = oRecPattern.Exceptions.Item(i+1).AppointmentItem
-                    gInstance['location'] = oInstance.Location
-                    
-                    gInstance['start'], gInstance['end'] = self.convertOutlookStartEnd(oInstance)
-                    self.service.events().update(calendarId='primary', eventId=gInstance['id'], body=gInstance).execute()
-                    print("updated instance on %s at %s" % (str(oInstance.Start)[:-15], oInstance.Location))
+                        print("updated instance on %s at %s" % (str(oInstance.Start)[:-15], oInstance.Location))
             
     def syncFromOutlook(self):
         outlookEvents = outlookCalReader.getOutlookCalEvents()
