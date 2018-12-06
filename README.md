@@ -12,3 +12,6 @@ Author: Bo Zhang <bowardzhang@gmail.com>
 2.  Under Library, enable the  [Google Calendar API](https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview).
 3.  Under Credentials, create a new OAuth client ID for application type Other and download it as a JSON file.
 4.  Rename the downloaded JSON file to  `credentials.json`  and place it in the Python script folder.
+
+### Open Issue
+1. If an event in Outlook is deleted, it cannot be automatically deleted in Google calendar. The reason is that the program has no information of deleted Outlook events.
