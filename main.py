@@ -15,7 +15,7 @@ import outlookCalReader
 import pytz.reference
 
 HIDE_SUBJECT = True
-ORGANIZATION_NAME = "Company_XXX"
+ORGANIZATION_NAME = "COMPANY"
 
 RecurrenceTypeDict = {0:"DAILY", 1:"WEEKLY", 2:"MONTHLY",}
 
@@ -105,8 +105,8 @@ class GoogleCalendar:
         if outlookEvent.IsRecurring:
             freq = RecurrenceTypeDict[oRecPattern.Interval]
             recEndDate = oRecPattern.PatternEndDate
-            recEndDate = str(recEndDate).replace('-', '').replace(' ', 'T').replace(':', '')[:-5]
-            rule = "RRULE:FREQ=%s;UNTIL=%sZ" % (freq, recEndDate)
+            recEndDate = str(recEndDate).replace('-', '').replace(' ', 'T').replace(':', '')[:-11]
+            rule = "RRULE:FREQ=%s;UNTIL=%s235959Z" % (freq, recEndDate)
             event['recurrence'] = [rule]
             event['summary'] += " (series)"
 
@@ -134,7 +134,7 @@ class GoogleCalendar:
             for i in range(oRecPattern.Exceptions.count):
                 oItem = oRecPattern.Exceptions.Item(i+1)
                 if i >= len(gInstances): # todo
-                    print("\n Warning: additional instance on %s" % str(oItem.AppointmentItem.Start)[:-15])
+                    print("\n Warning: additional instance (%d) on %s\n" % (i, str(oItem.AppointmentItem.Start)[:-15]))
                 else:
                     gInstance = gInstances[i]
                     if oItem.Deleted: # deactivate exceptions
