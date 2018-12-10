@@ -6,6 +6,7 @@ Author: Bo Zhang <bowardzhang@gmail.com>
 ### Features
 1. Can be configured to hide subject as "%COMPANY% busy" for security reasons.
 2. Deal with recurring events and exceptions in a reccurring series.
+3. Delete events which were synchronized from Outlook to Google Calendear but do not exist in Outlook anymore 
 
 ### Preparation
 1.  Visit the [Google API Console](https://console.developers.google.com/) and create a new project.
@@ -14,4 +15,4 @@ Author: Bo Zhang <bowardzhang@gmail.com>
 4.  Rename the downloaded JSON file to  `credentials.json`  and place it in the Python script folder.
 
 ### Open Issue
-1. If an event in Outlook is deleted, it cannot be automatically deleted in Google calendar. The reason is that the program has no information of deleted Outlook events.
+1. If a single event of a series in Outlook is deleted, it cannot be automatically deleted in Google calendar. This could be done in the future.
