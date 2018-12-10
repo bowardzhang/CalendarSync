@@ -15,8 +15,9 @@ import outlookCalReader
 import pytz.reference
 
 HIDE_SUBJECT = True
-ORGANIZATION_NAME = "COMPANY"
+ORGANIZATION_NAME = "ITK"
 
+Outlook_Event_Kind = 'Outlook_Event'
 RecurrenceTypeDict = {0:"DAILY", 1:"WEEKLY", 2:"MONTHLY",}
 
 # correct string like 2018-11-05T10:00:00+00:00
@@ -39,7 +40,7 @@ class GoogleCalendar:
         self.service = build('calendar', 'v3', http=creds.authorize(Http()))
         self.eventIds = []
         
-    def readCalEvents(self, aheadDays=360, eventMax = 100):
+    def readCalEvents(self, aheadDays=360, eventMax = 50):
         dtNow = datetime.datetime.now()
         dtMax = dtNow + datetime.timedelta(days=aheadDays)
         events_result = self.service.events().list(
@@ -49,19 +50,14 @@ class GoogleCalendar:
             maxResults=eventMax, 
             timeMin=dtNow.strftime('%Y-%m-%dT%H:%M:%S-00:00'),
             timeMax=dtMax.strftime('%Y-%m-%dT%H:%M:%S-00:00'),
-            showDeleted=True,
+            showDeleted=False,
             ).execute()
         events = events_result.get('items', [])
         print('found %d google events in %d days' % (len(events), aheadDays))
         
         for event in events:
-            start = event['start'].get('dateTime', event['start'].get('date'))
+            #start = event['start'].get('dateTime', event['start'].get('date'))
             self.eventIds.append(event['id'])
-        
-    def eventExist(self, outlookEvent):
-        if outlookEvent.GlobalAppointmentID.lower() in self.eventIds:
-            return True
-        return False
         
     def convertOutlookStartEnd(self, outlookEvent):
         start = {}
@@ -99,6 +95,7 @@ class GoogleCalendar:
               #'description': outlookEvent.Body,
               'start': start,
               'end': end,
+              'extendedProperties': {'private':{'syncFromOutlook': True}}
         }
         
         oRecPattern = outlookEvent.GetRecurrencePattern()
@@ -119,7 +116,6 @@ class GoogleCalendar:
         startStr = start.get('dateTime', start.get('date'))
         if eventExists:
             self.service.events().update(calendarId='primary', eventId=eId, body=event).execute()
-            print(event) # todo
             print('\nEvent [%s] on %s exists and is updated' % (outlookEvent.Subject, startStr))
         else:
             event = self.service.events().insert(calendarId='primary', body=event).execute()
@@ -151,6 +147,20 @@ class GoogleCalendar:
             
     def syncFromOutlook(self):
         outlookEvents = outlookCalReader.getOutlookCalEvents()
+        outlookEventIds = [oe.GlobalAppointmentID.lower() for oe in outlookEvents]
+        
+        # delete events which were synchronized from Outlook but do not exist in Outlook anymore      
+        for eId in self.eventIds:
+            gEvent = self.service.events().get(calendarId='primary', eventId=eId).execute()
+            try:
+                if(gEvent['extendedProperties']['private']['syncFromOutlook'] == 'true') \
+                   and (eId not in outlookEventIds): # synced outlook not in outlook any more
+                        print('delete outdated outlook event from Google calendar: %s %s %s' % (gEvent['summary'], gEvent['start'], gEvent.get('extendedProperties')))
+                        self.service.events().delete(calendarId='primary', eventId=eId).execute()
+            except:
+                pass   
+        
+        # add outlook events to google calendar
         for oe in outlookEvents:
             self.addOutlookCalEvent(oe)
 
